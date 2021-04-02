@@ -1,37 +1,66 @@
 const { request, response } = require('express');
+const bcryptjs = require('bcryptjs');
 
-const getUser = (req = request, res = response ) => {
+const User = require('../models/user');
 
-    const { page = 1, limit = 10, apikey } = req.query;
+const getUser = async (req = request, res = response ) => {
+
+
+    const { page = 1, limit = 10, apikey, from = 0 } = req.query;
+
+    const query = { state: true };
+
+    /*
+    const usuarios = await User.find( query )
+        .skip( Number( from ) )
+        .limit( Number( limit) );
+
+    const total = await User.countDocuments( query );
+    */
+    const [ total, users] = await Promise.all([
+        User.countDocuments( query ),
+        User.find( query )
+            .skip( Number( from ) )
+            .limit( Number( limit) )
+    ]);
 
     res.json({
-        msg: 'get API - controller',
-        page,
-        limit,
-        apikey
+        total, 
+        users
     });
 }
 
-const postUser = (req, res = response ) => {
+const postUser = async (req, res = response ) => {
 
-    const body = req.body;
-    const { name, age } = req.body;
+    const { name, email, password, role } = req.body;    
+    const user = new User({ name, email, password, role });
+
+    // Encriptar passwrod
+    const salt = bcryptjs.genSaltSync();
+    user.password = bcryptjs.hashSync( password, salt );
+    await user.save();
 
     res.json({
-        msg: 'post API - controller',
-        body,
-        name,
-        age
+        user
     });
+
 }
 
-const putUser = (req, res = response ) => {
+const putUser = async (req, res = response ) => {
 
     const id = req.params.id;
+    const { _id, password, google, correo, ...rest } = req.body;
+
+    // Validar contra BBDD
+    if ( password ) {
+        const salt = bcryptjs.genSaltSync();
+        rest.password = bcryptjs.hashSync( password, salt );
+    }
+
+    const userDB = await User.findByIdAndUpdate( id, rest) ;
 
     res.json({
-        msg: 'put API - controller',
-        id
+        userDB
     });
 }
 
@@ -42,13 +71,17 @@ const patchUser = (req, res = response ) => {
     });
 }
 
-const deleteUser = (req, res = response ) => {
+const deleteUser = async (req, res = response ) => {
 
     const id = req.params.id;
 
-    res.json({
-        msg: 'delete API - controller'
-    });
+    //const userDB = await User.findByIdAndDelete(id); // Elimina físicamente. 
+
+    const userDB = await User.findByIdAndUpdate( id, { state: false } );
+
+    res.json(
+        userDB
+    );
 }
 
 module.exports = {
